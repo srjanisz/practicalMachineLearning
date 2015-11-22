@@ -1,0 +1,99 @@
+Practical Machine Learning Course Project
+========================================================
+
+# Preprocessing and Cleaning Data
+First, load in the data.  
+```{r}
+library(caret)
+library(rpart)
+library(randomForest)
+data<-read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+testData<-read.csv("pml-testing.csv",na.strings=c("NA","#DIV/0!",""))
+```
+
+
+Divide the training data into subsets, one to train the classifiers and one to use as a validation set.
+```{r}
+trainIndex<-createDataPartition(data$X, p=0.6, list=FALSE)
+training<-data[trainIndex,8:160]
+testing<-data[-trainIndex,8:160]
+
+```
+
+
+It is necessary to clean the training data.  First, remove the columns that have near zero variance.  
+```{r }
+NZV <- nearZeroVar(training, saveMetrics=TRUE)
+training<-training[,NZV$nzv==FALSE]
+```
+
+The second data cleaning item performed is removing those columns that have over 30% of their values as NA.
+
+```{r}
+tmpTrain<-training
+for(i in 1:length(training)){
+    if( sum(is.na (training[,i]))/ nrow(training) >=.7){
+        for(j in 1:length(tmpTrain)){
+            if( length(grep(names(training[i]), names(tmpTrain)[j])) ==1){
+                tmpTrain <-tmpTrain[,-j]
+            }
+        }
+    }
+}
+
+training<-tmpTrain
+```
+
+Lastly, we guarantee that our validation set and the testData set contain the same columns as the training set.
+
+```{r}
+testing<-testing[colnames(training)]
+testData<-testData[colnames(training[,-53])]
+
+```
+
+
+# Creating Classifiers
+
+## Prediction Tree
+
+The first classifier tried is a prediction tree.  The overall accuracy rate of 73.48% indicates that a more complex classifier is necessary, as the out-of-sample error rate is 26.52%.
+```{r}
+rp<- rpart(classe ~ ., data=training, method="class")
+rp_pred<-predict(rp, testing, type="class")
+confusionMatrix(rp_pred, testing$classe)
+```
+
+## Random Forest
+
+The second classifier tried is a random forest.  The overall accuracy rate for this classifier is 99.25% with a confidence interval of (.9903, .9943).  This corresponds to a 0.75% out-of-sample error rate.
+
+```{r}
+set.seed(73729)
+rf<-randomForest(classe ~ ., data=training, method="class")
+rf_pred<-predict(rf, testing, type="class")
+confusionMatrix(rf_pred, testing$classe)
+```
+
+
+# Predicting Values for Test Data
+
+Below are the predictions for the test data and the code used to create the submission files.
+
+```{r}
+testDataPred<-predict(rf, testData, type="class")
+testDataPred
+```
+
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(testDataPred)
+```
